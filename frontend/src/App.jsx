@@ -101,7 +101,7 @@ const NAV = [
   { k: "purchase-orders", label: "P. Orders", i: "📜", r: ["admin", "manager"] },
   { k: "movements", label: "Stock Log", i: "⇅", r: ["admin", "manager"] },
   { k: "categories", label: "Categories", i: "▣", r: ["admin", "manager", "viewer"] },
-  { k: "suppliers", label: "Suppliers", i: "⊞", r: ["admin", "manager", "viewer"] },
+  { k: "suppliers", label: "Suppliers", i: "⊞", r: ["admin", "manager"] },
   { k: "reports", label: "Reports", i: "▲", r: ["admin", "manager"] },
 ];
 
@@ -230,7 +230,7 @@ function DashboardPage() {
 }
 
 function ProductsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const toast = useToast();
   const [rows, setRows] = useState([]);
   const [cats, setCats] = useState([]);
@@ -249,7 +249,7 @@ function ProductsPage() {
 
   return (
     <div>
-      <PH title="Products" sub="Managing your warehouse catalog"><button onClick={() => { setForm({}); setEditing(null); setModal("form"); }} style={ss.btn}>+ New Product</button></PH>
+      <PH title="Products" sub="Managing your warehouse catalog">{user?.profile?.role !== "viewer" && <button onClick={() => { setForm({}); setEditing(null); setModal("form"); }} style={ss.btn}>+ New Product</button>}</PH>
       <div style={ss.tableWrap}>
         <table style={ss.table}>
           <thead><tr>{["SKU", "Name", "Category", "Price", "Stock", "Status", "Actions"].map(h => <th key={h} style={ss.th}>{h}</th>)}</tr></thead>
@@ -258,7 +258,7 @@ function ProductsPage() {
               <tr key={p.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                 <td style={ss.td}><code style={{ color: C.brand, fontWeight: 700 }}>{p.sku}</code></td><td style={ss.td}><strong>{p.name}</strong></td><td style={ss.td}>{p.category_name}</td>
                 <td style={ss.td}>KES {Number(p.price).toLocaleString()}</td><td style={ss.td}><strong>{p.quantity}</strong></td><td style={ss.td}><Badge label={p.status} color={stockColor(p.status)} /></td>
-                <td style={ss.td}><button onClick={() => { setForm(p); setEditing(p); setModal("form"); }} style={ss.btnXs}>✎</button></td>
+                <td style={ss.td}>{user?.profile?.role !== "viewer" && <button onClick={() => { setForm(p); setEditing(p); setModal("form"); }} style={ss.btnXs}>✎</button>}</td>
               </tr>
             ))}
           </tbody>
@@ -278,7 +278,7 @@ function ProductsPage() {
 }
 
 function OrdersPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const toast = useToast();
   const [rows, setRows] = useState([]);
   const [prods, setProds] = useState([]);
@@ -303,7 +303,7 @@ function OrdersPage() {
 
   return (
     <div>
-      <PH title="Orders" sub="Recent sales history"><button onClick={() => { setForm({ customer_name: "", customer_email: "", items: [] }); setModal("add"); }} style={ss.btn}>+ New Order</button></PH>
+      <PH title="Orders" sub="Recent sales history">{user?.profile?.role !== "viewer" && <button onClick={() => { setForm({ customer_name: "", customer_email: "", items: [] }); setModal("add"); }} style={ss.btn}>+ New Order</button>}</PH>
       <div style={ss.tableWrap}>
         <table style={ss.table}>
           <thead><tr>{["Order #", "Customer", "Total", "Status", "Action"].map(h => <th key={h} style={ss.th}>{h}</th>)}</tr></thead>
@@ -312,7 +312,7 @@ function OrdersPage() {
               <tr key={o.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                 <td style={ss.td}><code style={{ fontWeight: 700 }}>{o.order_number}</code></td><td style={ss.td}><strong>{o.customer_name}</strong></td>
                 <td style={ss.td}>KES {Number(o.total_amount).toLocaleString()}</td><td style={ss.td}><Badge label={o.status} color={orderColor(o.status)} /></td>
-                <td style={ss.td}><select value={o.status} onChange={e => updateStatus(o, e.target.value)} style={{ ...ss.input, padding: 6, width: "auto", margin:0 }}>{["pending","confirmed","processing","shipped","delivered","cancelled"].map(s => <option key={s} value={s}>{s}</option>)}</select></td>
+                <td style={ss.td}>{user?.profile?.role !== "viewer" ? <select value={o.status} onChange={e => updateStatus(o, e.target.value)} style={{ ...ss.input, padding: 6, width: "auto", margin:0 }}>{["pending","confirmed","processing","shipped","delivered","cancelled"].map(s => <option key={s} value={s}>{s}</option>)}</select> : <span style={{ color: C.muted, fontSize: 13 }}>--</span>}</td>
               </tr>
             ))}
           </tbody>
