@@ -2,9 +2,11 @@
 reports/views.py
 ================
 Reporting endpoints: stock summary, sales trends, low-stock alerts,
-and AI-assisted demand forecasting hooks.
+AI-assisted demand forecasting, and CSV exports.
 """
 
+import csv
+from django.http import HttpResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -24,6 +26,7 @@ class StockSummaryReport(APIView):
         in_stock = Product.objects.filter(status="in_stock").count()
         low_stock = Product.objects.filter(status="low_stock").count()
         out_of_stock = Product.objects.filter(status="out_of_stock").count()
+        discontinued = Product.objects.filter(status="discontinued").count()
         total_value = Product.objects.aggregate(
             val=Sum(F("quantity") * F("cost_price"))
         )["val"] or 0
@@ -33,6 +36,7 @@ class StockSummaryReport(APIView):
             "in_stock": in_stock,
             "low_stock": low_stock,
             "out_of_stock": out_of_stock,
+            "discontinued": discontinued,
             "total_inventory_value_kes": float(total_value),
             "generated_at": timezone.now().isoformat(),
         })
@@ -93,7 +97,6 @@ class DemandForecastReport(APIView):
     """
     AI-Assisted Demand Forecasting — Rule-Based Engine
     ---------------------------------------------------
-    Provides restocking recommendations based on historical sales velocity.
     Hook is structured for future replacement with an ML/AI model.
     """
     permission_classes = [IsAuthenticated]
@@ -102,7 +105,6 @@ class DemandForecastReport(APIView):
         days = int(request.query_params.get("days", 30))
         since = timezone.now() - timedelta(days=days)
 
-        # Aggregate units sold per product in the window
         sold_data = (
             OrderItem.objects.filter(
                 order__created_at__gte=since,
@@ -139,3 +141,29 @@ class DemandForecastReport(APIView):
             "forecasts": forecasts,
             "note": "Rule-based engine. AI model integration hook is in place.",
         })
+
+
+class ExportOrdersReport(APIView):
+    """Export all orders as CSV."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="orders_export.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            "Order #", "Customer", "Email", "Status",
+            "Total (KES)", "Items Count", "Created At",
+        ])
+        for order in Order.objects.prefetch_related("items").all():
+            writer.writerow([
+                order.order_number,
+                order.customer_name,
+                order.customer_email,
+                order.status,
+                order.total_amount,
+                order.items.count(),
+                order.created_at.strftime("%Y-%m-%d %H:%M"),
+            ])
+        return response

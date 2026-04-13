@@ -1,53 +1,44 @@
 """
 inventory/management/commands/seed_data.py
 ==========================================
-Populates the database with realistic demo data for development and MVP showcase.
-
-Usage:
-    python manage.py seed_data
-    python manage.py seed_data --clear   # wipe existing data first
+Populates the database with realistic, high-quality demo data for a professional MVP showcase.
+Upgraded to include 10 items per category as requested for a rich "out-of-the-box" experience.
 """
 
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from django.db import transaction
-from inventory.models import Category, Supplier, Product, Order, OrderItem
+from inventory.models import Category, Supplier, Product, Order, OrderItem, PurchaseOrder, PurchaseOrderItem
 from users.models import UserProfile
-
+import uuid
+import random
 
 class Command(BaseCommand):
-    help = "Seed the database with demo data for MVP showcase."
+    help = "Seed the database with 10+ items per entity for a premium MVP showcase."
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            "--clear",
-            action="store_true",
-            help="Clear existing data before seeding.",
-        )
+        parser.add_argument("--clear", action="store_true", help="Clear existing data before seeding.")
 
     def handle(self, *args, **options):
         if options["clear"]:
-            self.stdout.write("Clearing existing data...")
+            self.stdout.write("Cleaning up existing data...")
+            PurchaseOrder.objects.all().delete()
             Order.objects.all().delete()
             Product.objects.all().delete()
             Supplier.objects.all().delete()
             Category.objects.all().delete()
             User.objects.filter(is_superuser=False).delete()
 
-        self.stdout.write("Seeding demo data...")
+        self.stdout.write("Starting creative seeding process...")
         with transaction.atomic():
             self._create_users()
             categories = self._create_categories()
             suppliers = self._create_suppliers()
             products = self._create_products(categories, suppliers)
             self._create_orders(products)
+            self._create_purchase_orders(products, suppliers)
 
-        self.stdout.write(self.style.SUCCESS(
-            "\nDemo data seeded successfully!\n"
-            "  Admin login  : admin / admin1234\n"
-            "  Manager login: manager / manager1234\n"
-            "  Viewer login : viewer / viewer1234\n"
-        ))
+        self.stdout.write(self.style.SUCCESS("\nDone! Demo data seeded successfully with 10 items per module!"))
 
     def _create_users(self):
         users = [
@@ -57,92 +48,105 @@ class Command(BaseCommand):
         ]
         for username, password, first, last, email, role in users:
             if not User.objects.filter(username=username).exists():
-                user = User.objects.create_user(
-                    username=username, password=password,
-                    first_name=first, last_name=last, email=email,
-                )
+                user = User.objects.create_user(username=username, password=password, first_name=first, last_name=last, email=email)
                 UserProfile.objects.update_or_create(user=user, defaults={"role": role})
-                self.stdout.write(f"  Created user: {username}")
 
     def _create_categories(self):
-        cats = [
-            ("Electronics", "Computers, phones, accessories"),
-            ("Office Supplies", "Stationery, printing, desk equipment"),
-            ("Furniture", "Chairs, desks, shelving"),
-            ("Networking", "Cables, routers, switches"),
-            ("Software", "Licences and subscriptions"),
+        cats_data = [
+            ("Electronics", "Laptops, monitors, and modern computing hardware."),
+            ("Office Supplies", "Daily essentials: paper, ink, and stationery."),
+            ("Furniture", "Ergonomic chairs, desks, and storage solutions."),
+            ("Networking", "Routers, switches, and infrastructure cabling."),
+            ("Software", "SaaS subscriptions and enterprise licenses."),
+            ("Wearables", "Smartwatches, trackers, and health tech."),
+            ("Peripherals", "Keyboard, mice, and desk accessories."),
+            ("Infrastructure", "Server racks, cooling, and power management."),
+            ("Security", "CCTV systems, smart locks, and sensors."),
+            ("Media", "Cameras, microphones, and studio gear.")
         ]
-        result = {}
-        for name, desc in cats:
-            cat, _ = Category.objects.get_or_create(name=name, defaults={"description": desc})
-            result[name] = cat
-        self.stdout.write(f"  Created {len(cats)} categories")
-        return result
+        cats = [Category.objects.get_or_create(name=n, defaults={"description": d})[0] for n, d in cats_data]
+        self.stdout.write(f"  + Created {len(cats)} categories")
+        return cats
 
     def _create_suppliers(self):
-        sups = [
-            ("TechSource Kenya", "supply@techsource.co.ke", "+254700111222"),
-            ("OfficeWorld Ltd", "orders@officeworld.co.ke", "+254700333444"),
-            ("NetGear Distributors", "sales@netgear.co.ke", "+254700555666"),
+        sups_data = [
+            ("TechSource Global", "logistics@techsource.com", "+254700000001"),
+            ("OfficeWorld Kenya", "sales@officeworld.co.ke", "+254700000002"),
+            ("NetGear Distributors", "net@distro.co.ke", "+254700000003"),
+            ("CloudScale Systems", "partners@cloudscale.com", "+254700000004"),
+            ("SecureSafe Solutions", "orders@securesafe.co.ke", "+254700000005"),
+            ("WoodCraft Interiors", "info@woodcraft.co.ke", "+254700000006"),
+            ("Universal Media", "hello@universalmedia.com", "+254700000007"),
+            ("PeripheralPro Ltd", "pro@peripheral.co.ke", "+254700000008"),
+            ("GlobalConnect Solutions", "sales@gconnect.com", "+254700000009"),
+            ("Prime Fulfillment", "ops@primefulfill.co.ke", "+254700000010")
         ]
-        result = {}
-        for name, email, phone in sups:
-            sup, _ = Supplier.objects.get_or_create(
-                contact_email=email, defaults={"name": name, "phone": phone}
-            )
-            result[name] = sup
-        self.stdout.write(f"  Created {len(sups)} suppliers")
-        return result
+        sups = [Supplier.objects.get_or_create(name=n, defaults={"contact_email": e, "phone": p})[0] for n, e, p in sups_data]
+        self.stdout.write(f"  + Created {len(sups)} suppliers")
+        return sups
 
     def _create_products(self, cats, sups):
         admin = User.objects.get(username="admin")
         products_data = [
-            ("ELC-001", "Wireless Keyboard", cats["Electronics"], sups["TechSource Kenya"], 2500, 1600, 80, 10),
-            ("ELC-002", "USB-C Monitor 24\"", cats["Electronics"], sups["TechSource Kenya"], 28000, 19000, 15, 3),
-            ("ELC-003", "Noise-Cancelling Headphones", cats["Electronics"], sups["TechSource Kenya"], 8500, 5500, 40, 8),
-            ("ELC-004", "Laptop Stand — Aluminium", cats["Electronics"], sups["TechSource Kenya"], 3200, 2000, 60, 10),
-            ("NET-001", "Gigabit Switch 8-Port", cats["Networking"], sups["NetGear Distributors"], 4500, 2900, 25, 5),
-            ("NET-002", "CAT6 Cable 50m Roll", cats["Networking"], sups["NetGear Distributors"], 1800, 1100, 30, 10),
-            ("OFF-001", "A4 Paper Ream 80gsm", cats["Office Supplies"], sups["OfficeWorld Ltd"], 650, 420, 200, 50),
-            ("OFF-002", "Whiteboard Markers (12pk)", cats["Office Supplies"], sups["OfficeWorld Ltd"], 480, 280, 8, 20),
-            ("FRN-001", "Ergonomic Office Chair", cats["Furniture"], sups["OfficeWorld Ltd"], 18500, 12000, 4, 2),
-            ("FRN-002", "Standing Desk — Height Adjustable", cats["Furniture"], sups["OfficeWorld Ltd"], 32000, 22000, 2, 1),
+            ("ELC-001", "MacBook Pro 14\"", cats[0], sups[0], 280000, 240000, 12, 5),
+            ("OFF-001", "A4 Paper Ream (Box of 5)", cats[1], sups[1], 3500, 2800, 100, 20),
+            ("FRN-001", "Herman Miller Aeron", cats[2], sups[5], 145000, 110000, 8, 2),
+            ("NET-001", "Cisco 24-Port Switch", cats[3], sups[2], 45000, 32000, 15, 4),
+            ("SFT-001", "Adobe Creative Cloud (Annual)", cats[4], sups[3], 72000, 68000, 50, 5),
+            ("WRE-001", "Apple Watch Ultra 2", cats[5], sups[0], 115000, 95000, 20, 3),
+            ("PER-001", "Logitech MX Master 3S", cats[6], sups[7], 14500, 9500, 45, 10),
+            ("INF-001", "APC Smart-UPS 1500VA", cats[7], sups[8], 65000, 48000, 10, 2),
+            ("SEC-001", "Ubiquiti G5 Bullet Cam", cats[8], sups[4], 28000, 19500, 30, 8),
+            ("MED-001", "Sony A7 IV Body", cats[9], sups[6], 320000, 275000, 5, 2)
         ]
         products = []
         for sku, name, cat, sup, price, cost, qty, reorder in products_data:
-            p, _ = Product.objects.get_or_create(
-                sku=sku,
-                defaults={
-                    "name": name, "category": cat, "supplier": sup,
-                    "price": price, "cost_price": cost,
-                    "quantity": qty, "reorder_level": reorder,
-                    "created_by": admin,
-                },
-            )
+            p, _ = Product.objects.get_or_create(sku=sku, defaults={
+                "name": name, "category": cat, "supplier": sup,
+                "price": price, "cost_price": cost, "quantity": qty,
+                "reorder_level": reorder, "created_by": admin
+            })
             products.append(p)
-        self.stdout.write(f"  Created {len(products_data)} products")
+        self.stdout.write(f"  + Created {len(products)} products")
         return products
 
     def _create_orders(self, products):
-        import uuid
         admin = User.objects.get(username="admin")
-        orders_data = [
-            ("Jane Wanjiku", "jane@homeview.co.ke", "delivered", [(products[0], 2), (products[3], 1)]),
-            ("Peter Kamau", "peter@company.co.ke", "shipped", [(products[2], 1), (products[4], 2)]),
-            ("Amina Hassan", "amina@firm.co.ke", "pending", [(products[6], 10), (products[7], 5)]),
+        customers = [
+            ("John Doe", "john@example.com"), ("Jane Smith", "jane@company.ke"),
+            ("Sam Kiprotich", "sam@tech.co.ke"), ("Alice Njoroge", "alice@biz.com"),
+            ("Peter Otieno", "p.otieno@logistics.ke"), ("Amina Juma", "amina@creative.ke"),
+            ("Chris Evans", "c.evans@marvel.com"), ("Stark Industries", "tony@stark.com"),
+            ("Bruce Wayne", "bruce@wayne.corp"), ("Dianna Prince", "dianna@amazon.com")
         ]
-        for customer, email, status, items in orders_data:
+        for i, (name, email) in enumerate(customers):
             order = Order.objects.create(
                 order_number=f"ORD-{uuid.uuid4().hex[:8].upper()}",
-                customer_name=customer,
-                customer_email=email,
-                status=status,
-                created_by=admin,
+                customer_name=name, customer_email=email,
+                status=random.choice(["pending", "confirmed", "processing", "shipped", "delivered"]),
+                created_by=admin
             )
-            for product, qty in items:
-                OrderItem.objects.create(
-                    order=order, product=product,
-                    quantity=qty, unit_price=product.price,
-                )
+            item_count = random.randint(1, 3)
+            selected_products = random.sample(products, item_count)
+            for prod in selected_products:
+                qty = random.randint(1, 2)
+                OrderItem.objects.create(order=order, product=prod, quantity=qty, unit_price=prod.price)
             order.calculate_total()
-        self.stdout.write(f"  Created {len(orders_data)} sample orders")
+        self.stdout.write(f"  + Created {len(customers)} orders")
+
+    def _create_purchase_orders(self, products, sups):
+        admin = User.objects.get(username="admin")
+        for i in range(10):
+            sup = random.choice(sups)
+            po = PurchaseOrder.objects.create(
+                po_number=f"PO-{uuid.uuid4().hex[:8].upper()}",
+                supplier=sup, status=random.choice(["draft", "sent", "received"]),
+                created_by=admin, notes=f"Standard replenish for {sup.name}"
+            )
+            # Select 1-3 products from this supplier or random for demo
+            sup_products = [p for p in products if p.supplier == sup]
+            selected = sup_products if sup_products else random.sample(products, 2)
+            for prod in selected:
+                qty = random.randint(10, 50)
+                PurchaseOrderItem.objects.create(purchase_order=po, product=prod, quantity_ordered=qty, unit_cost=prod.cost_price)
+        self.stdout.write(f"  + Created 10 purchase orders")

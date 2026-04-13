@@ -29,7 +29,9 @@ def admin_user(db):
         first_name="Bravin",
         last_name="Ouma",
     )
-    UserProfile.objects.create(user=user, role=UserProfile.Role.ADMIN)
+    # The signal already created a profile; update it.
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
     return user
 
 
@@ -41,7 +43,9 @@ def viewer_user(db):
         password="viewerpass123",
         email="viewer@teklini.co.ke",
     )
-    UserProfile.objects.create(user=user, role=UserProfile.Role.VIEWER)
+    # The signal already created a profile; update it.
+    user.profile.role = UserProfile.Role.VIEWER
+    user.profile.save()
     return user
 
 
@@ -225,4 +229,55 @@ class TestReports:
     def test_demand_forecast(self, auth_client):
         response = auth_client.get("/api/v1/reports/demand-forecast/")
         assert response.status_code == 200
-        assert "forecasts" in response.data
+        data = response.data
+        # Verify response structure
+        assert "forecasts" in data
+        assert "analysis_window_days" in data
+        assert len(data["forecasts"]) > 0
+
+
+@pytest.mark.django_db
+class TestPurchaseOrderAPI:
+
+    def test_create_po(self, auth_client, supplier, product):
+        url = reverse("purchaseorder-list")
+        data = {
+            "supplier": supplier.id,
+            "notes": "Urgent restock",
+            "items": [
+                {"product": product.id, "quantity_ordered": 50, "unit_cost": 2100.00}
+            ]
+        }
+        res = auth_client.post(url, data, format="json")
+        assert res.status_code == 201
+        assert res.data["status"] == "draft"
+        assert len(res.data["items"]) == 1
+
+    def test_mark_po_sent(self, auth_client, product, supplier):
+        from inventory.models import PurchaseOrder
+        po = PurchaseOrder.objects.create(supplier=supplier, created_by=product.created_by)
+        url = reverse("purchaseorder-send", args=[po.id])
+        res = auth_client.post(url)
+        assert res.status_code == 200
+        po.refresh_from_db()
+        assert po.status == "sent"
+
+    def test_receive_po_increments_stock(self, auth_client, product, supplier):
+        from inventory.models import PurchaseOrder, PurchaseOrderItem
+        po = PurchaseOrder.objects.create(supplier=supplier, created_by=product.created_by, status="sent")
+        PurchaseOrderItem.objects.create(po=po, product=product, quantity_ordered=10, unit_cost=2100.0)
+
+        initial_qty = product.quantity
+        url = reverse("purchaseorder-receive", args=[po.id])
+        res = auth_client.post(url)
+        
+        assert res.status_code == 200
+        product.refresh_from_db()
+        assert product.quantity == initial_qty + 10
+        
+        po.refresh_from_db()
+        assert po.status == "received"
+        
+        # Verify movement was created
+        from inventory.models import StockMovement
+        assert StockMovement.objects.filter(product=product, movement_type="purchase").exists()

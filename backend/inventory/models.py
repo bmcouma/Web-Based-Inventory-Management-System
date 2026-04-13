@@ -1,7 +1,8 @@
 """
 inventory/models.py
 ===================
-Core models: Category, Supplier, Product, StockMovement, Order, OrderItem.
+Core models: Category, Supplier, Product, StockMovement, Order, OrderItem,
+PurchaseOrder, PurchaseOrderItem.
 """
 
 from django.db import models
@@ -48,6 +49,8 @@ class Product(models.Model):
     sku = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    barcode = models.CharField(max_length=100, blank=True, null=True, unique=True)
+    image = models.ImageField(upload_to="products/", blank=True, null=True)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name="products")
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, related_name="products")
     price = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
@@ -73,13 +76,14 @@ class Product(models.Model):
         return 0
 
     def save(self, *args, **kwargs):
-        # Auto-update stock status
-        if self.quantity == 0:
-            self.status = self.StockStatus.OUT_OF_STOCK
-        elif self.quantity <= self.reorder_level:
-            self.status = self.StockStatus.LOW_STOCK
-        else:
-            self.status = self.StockStatus.IN_STOCK
+        # Auto-update stock status (skip if manually set to discontinued)
+        if self.status != self.StockStatus.DISCONTINUED:
+            if self.quantity == 0:
+                self.status = self.StockStatus.OUT_OF_STOCK
+            elif self.quantity <= self.reorder_level:
+                self.status = self.StockStatus.LOW_STOCK
+            else:
+                self.status = self.StockStatus.IN_STOCK
         super().save(*args, **kwargs)
 
 
@@ -89,6 +93,7 @@ class StockMovement(models.Model):
         OUT = "out", "Stock Out"
         ADJUSTMENT = "adjustment", "Adjustment"
         RETURN = "return", "Return"
+        PURCHASE = "purchase", "Purchase Order Receive"
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="movements")
     movement_type = models.CharField(max_length=20, choices=MovementType.choices)
@@ -153,3 +158,69 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.product.name} x{self.quantity}"
+
+
+# ─── Purchase Orders ──────────────────────────────────────────────────────────
+
+
+class PurchaseOrder(models.Model):
+    class POStatus(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SENT = "sent", "Sent to Supplier"
+        RECEIVED = "received", "Received"
+        CANCELLED = "cancelled", "Cancelled"
+
+    po_number = models.CharField(max_length=50, unique=True)
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="purchase_orders")
+    status = models.CharField(max_length=20, choices=POStatus.choices, default=POStatus.DRAFT)
+    notes = models.TextField(blank=True)
+    expected_delivery = models.DateField(null=True, blank=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="purchase_orders")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"PO-{self.po_number} | {self.supplier.name} | {self.status}"
+
+    @property
+    def total_cost(self):
+        return sum(item.line_total for item in self.items.all())
+
+    def receive(self, performed_by):
+        """
+        Mark PO as received, update product quantities, and log stock movements.
+        """
+        if self.status == self.POStatus.RECEIVED:
+            return
+        for item in self.items.select_related("product").all():
+            item.product.quantity += item.quantity_ordered
+            item.product.save()
+            StockMovement.objects.create(
+                product=item.product,
+                movement_type=StockMovement.MovementType.PURCHASE,
+                quantity=item.quantity_ordered,
+                reason=f"Received via PO {self.po_number}",
+                reference=self.po_number,
+                performed_by=performed_by,
+            )
+        self.status = self.POStatus.RECEIVED
+        self.received_at = timezone.now()
+        self.save(update_fields=["status", "received_at"])
+
+
+class PurchaseOrderItem(models.Model):
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="po_items")
+    quantity_ordered = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+
+    @property
+    def line_total(self):
+        return self.unit_cost * self.quantity_ordered
+
+    def __str__(self):
+        return f"{self.product.sku} x{self.quantity_ordered} @ {self.unit_cost}"
