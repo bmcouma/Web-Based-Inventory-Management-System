@@ -1,8 +1,6 @@
 """
 reports/views.py
-================
-Reporting endpoints: stock summary, sales trends, low-stock alerts,
-AI-assisted demand forecasting, and CSV exports.
+Inventory analytics: stock summaries, sales trends, and demand forecasting.
 """
 
 import csv
@@ -10,18 +8,19 @@ from django.http import HttpResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, F, Q, Avg
+from django.db.models import Sum, Count, F, Q
 from django.db.models.functions import TruncMonth, TruncWeek
 from django.utils import timezone
 from datetime import timedelta
 
-from inventory.models import Product, Order, OrderItem, StockMovement
+from inventory.models import Product, Order, OrderItem
 
 
 class StockSummaryReport(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        """Aggregate current warehouse stock levels."""
         total = Product.objects.count()
         in_stock = Product.objects.filter(status="in_stock").count()
         low_stock = Product.objects.filter(status="low_stock").count()
@@ -46,6 +45,7 @@ class SalesTrendReport(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        """Analyze sales volume and revenue over time."""
         period = request.query_params.get("period", "monthly")
         days = int(request.query_params.get("days", 90))
         since = timezone.now() - timedelta(days=days)
@@ -81,6 +81,7 @@ class LowStockAlertReport(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        """List products requiring immediate replenishment."""
         products = Product.objects.filter(
             Q(status="low_stock") | Q(status="out_of_stock")
         ).select_related("supplier").values(
@@ -95,13 +96,13 @@ class LowStockAlertReport(APIView):
 
 class DemandForecastReport(APIView):
     """
-    AI-Assisted Demand Forecasting — Rule-Based Engine
-    ---------------------------------------------------
-    Hook is structured for future replacement with an ML/AI model.
+    Intelligent demand forecasting engine.
+    Structured for future ML model integration.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        """Calculate forecasted demand based on sales velocity."""
         days = int(request.query_params.get("days", 30))
         since = timezone.now() - timedelta(days=days)
 
@@ -129,25 +130,24 @@ class DemandForecastReport(APIView):
                 "name": item["product__name"],
                 "current_stock": item["product__quantity"],
                 "units_sold_in_period": item["total_sold"],
-                "daily_sales_velocity": round(daily_velocity, 2),
-                "estimated_days_of_stock": round(days_of_stock, 1) if days_of_stock != float("inf") else "N/A",
-                "restock_recommended": days_of_stock < 14,
-                # AI_HOOK: Replace this block with ML model inference
-                # forecast_engine.predict(product_id, horizon_days=30)
+                "avg_daily_sales": round(daily_velocity, 2),
+                "remaining_stock_days": round(days_of_stock, 1) if days_of_stock != float("inf") else "N/A",
+                "recommendation": "REORDER_NOW" if days_of_stock < 14 else "STABLE",
+                # MODEL_HOOK: Integrate ML inference here
             })
 
         return Response({
             "analysis_window_days": days,
             "forecasts": forecasts,
-            "note": "Rule-based engine. AI model integration hook is in place.",
+            "engine": "Standard Statistical (ML Hook Ready)",
         })
 
 
 class ExportOrdersReport(APIView):
-    """Export all orders as CSV."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        """Export full order history to CSV."""
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="orders_export.csv"'
 

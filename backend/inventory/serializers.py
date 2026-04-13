@@ -1,10 +1,8 @@
 """
 inventory/serializers.py
-========================
-DRF serializers for all inventory models including Purchase Orders.
+DRF serializers for inventory models, orders, and procurement workflows.
 """
 
-import csv
 from rest_framework import serializers
 from .models import (
     Category, Supplier, Product, StockMovement,
@@ -58,7 +56,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
-            raise serializers.ValidationError("A product with this SKU already exists.")
+            raise serializers.ValidationError("SKU already exists.")
         return value.upper()
 
     def validate_barcode(self, value):
@@ -68,7 +66,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
-            raise serializers.ValidationError("A product with this barcode already exists.")
+            raise serializers.ValidationError("Barcode already exists.")
         return value
 
 
@@ -104,7 +102,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
         quantity = data.get("quantity", 0)
         if product and product.quantity < quantity:
             raise serializers.ValidationError(
-                f"Insufficient stock. Available: {product.quantity}, Requested: {quantity}."
+                f"Insufficient stock. {product.quantity} available."
             )
         return data
 
@@ -132,8 +130,6 @@ class OrderSerializer(serializers.ModelSerializer):
         order.calculate_total()
         return order
 
-
-# ─── Purchase Orders ──────────────────────────────────────────────────────────
 
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)

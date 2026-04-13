@@ -1,7 +1,6 @@
 """
 inventory/views.py
-==================
-DRF ViewSets with RBAC, filtering, custom actions, CSV export, and Purchase Orders.
+Inventory management endpoints with RBAC, filtering, and custom workflow actions.
 """
 
 import csv
@@ -11,7 +10,6 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Sum, Count, F, Q
-from django.utils import timezone
 
 from .models import Category, Supplier, Product, StockMovement, Order, PurchaseOrder
 from .serializers import (
@@ -59,7 +57,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="low-stock")
     def low_stock(self, request):
-        """Return all products at or below their reorder level."""
+        """List products at or below reorder level."""
         products = self.queryset.filter(
             Q(status="low_stock") | Q(status="out_of_stock")
         )
@@ -68,7 +66,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="dashboard-stats")
     def dashboard_stats(self, request):
-        """Aggregate stats for the inventory dashboard."""
+        """Aggregate KPIs for dashboard."""
         total_products = Product.objects.count()
         low_stock_count = Product.objects.filter(
             Q(status="low_stock") | Q(status="out_of_stock")
@@ -97,7 +95,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="adjust-stock")
     def adjust_stock(self, request, pk=None):
-        """Manually adjust stock quantity and record the movement."""
+        """Manually adjust stock and log movement."""
         product = self.get_object()
         qty = int(request.data.get("quantity", 0))
         movement_type = request.data.get("movement_type", "adjustment")
@@ -124,7 +122,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="export")
     def export(self, request):
-        """Export all products as CSV."""
+        """Download product catalog as CSV."""
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="products_export.csv"'
 
@@ -171,6 +169,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="update-status")
     def update_status(self, request, pk=None):
+        """Transition order status with validation."""
         order = self.get_object()
         new_status = request.data.get("status")
         valid = [choice[0] for choice in Order.OrderStatus.choices]
@@ -198,27 +197,27 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="receive")
     def receive(self, request, pk=None):
-        """Mark a Purchase Order as received — updates stock and logs movements."""
+        """Receive PO stock and update inventory."""
         po = self.get_object()
         if po.status == PurchaseOrder.POStatus.RECEIVED:
             return Response(
-                {"error": "This Purchase Order has already been received."},
+                {"error": "Already received."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if po.status == PurchaseOrder.POStatus.CANCELLED:
             return Response(
-                {"error": "Cannot receive a cancelled Purchase Order."},
+                {"error": "Cannot receive cancelled PO."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         po.receive(performed_by=request.user)
         return Response({
-            "message": f"PO {po.po_number} received. Stock updated for {po.items.count()} product(s).",
+            "message": f"PO {po.po_number} received successfully.",
             "received_at": po.received_at,
         })
 
     @action(detail=True, methods=["post"], url_path="send")
     def send_to_supplier(self, request, pk=None):
-        """Advance PO from Draft to Sent."""
+        """Advance Draft PO to Sent state."""
         po = self.get_object()
         if po.status != PurchaseOrder.POStatus.DRAFT:
             return Response(
@@ -227,4 +226,4 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             )
         po.status = PurchaseOrder.POStatus.SENT
         po.save(update_fields=["status"])
-        return Response({"message": f"PO {po.po_number} marked as sent to supplier."})
+        return Response({"message": f"PO {po.po_number} sent."})

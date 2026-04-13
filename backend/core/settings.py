@@ -1,6 +1,5 @@
 """
 core/settings.py
-================
 Django settings for the Inventory Management System.
 Author: Bravin Ouma | Teklini Technologies
 """
@@ -26,12 +25,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # Third-party
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
     "django_filters",
-    # Local apps
     "inventory",
     "users",
     "reports",
@@ -68,7 +65,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
-# Database — PostgreSQL (primary), SQLite (development fallback)
 DB_ENGINE = os.environ.get("DB_ENGINE", "sqlite")
 
 if DB_ENGINE == "postgresql":
@@ -109,7 +105,6 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# DRF Configuration
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
@@ -135,7 +130,6 @@ REST_FRAMEWORK = {
     },
 }
 
-# CORS
 CORS_ALLOWED_ORIGINS = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000",
@@ -143,7 +137,6 @@ CORS_ALLOWED_ORIGINS = os.environ.get(
 
 CORS_ALLOW_CREDENTIALS = True
 
-# Email — defaults to console backend (dev-safe). Set EMAIL_HOST etc. in .env for production.
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
 )
@@ -154,7 +147,6 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@teklini.co.ke")
 
-# Logging
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

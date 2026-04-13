@@ -226,7 +226,21 @@ class TestReports:
         assert response.status_code == 200
         assert response.data["alert_count"] >= 1
 
-    def test_demand_forecast(self, auth_client):
+    def test_demand_forecast(self, auth_client, product):
+        from inventory.models import Order, OrderItem
+        from django.utils import timezone
+        
+        # Create a delivered order to supply data for forecasting
+        order = Order.objects.create(
+            order_number="ORD-TEST-FC",
+            customer_name="Forecast Tester",
+            customer_email="test@example.com",
+            status="delivered",
+            created_at=timezone.now()
+        )
+        OrderItem.objects.create(order=order, product=product, quantity=5, unit_price=product.price)
+        order.calculate_total()
+
         response = auth_client.get("/api/v1/reports/demand-forecast/")
         assert response.status_code == 200
         data = response.data
@@ -240,7 +254,7 @@ class TestReports:
 class TestPurchaseOrderAPI:
 
     def test_create_po(self, auth_client, supplier, product):
-        url = reverse("purchaseorder-list")
+        url = reverse("purchase-order-list")
         data = {
             "supplier": supplier.id,
             "notes": "Urgent restock",
@@ -256,7 +270,7 @@ class TestPurchaseOrderAPI:
     def test_mark_po_sent(self, auth_client, product, supplier):
         from inventory.models import PurchaseOrder
         po = PurchaseOrder.objects.create(supplier=supplier, created_by=product.created_by)
-        url = reverse("purchaseorder-send", args=[po.id])
+        url = reverse("purchase-order-send-to-supplier", args=[po.id])
         res = auth_client.post(url)
         assert res.status_code == 200
         po.refresh_from_db()
@@ -265,10 +279,10 @@ class TestPurchaseOrderAPI:
     def test_receive_po_increments_stock(self, auth_client, product, supplier):
         from inventory.models import PurchaseOrder, PurchaseOrderItem
         po = PurchaseOrder.objects.create(supplier=supplier, created_by=product.created_by, status="sent")
-        PurchaseOrderItem.objects.create(po=po, product=product, quantity_ordered=10, unit_cost=2100.0)
+        PurchaseOrderItem.objects.create(purchase_order=po, product=product, quantity_ordered=10, unit_cost=2100.0)
 
         initial_qty = product.quantity
-        url = reverse("purchaseorder-receive", args=[po.id])
+        url = reverse("purchase-order-receive", args=[po.id])
         res = auth_client.post(url)
         
         assert res.status_code == 200
