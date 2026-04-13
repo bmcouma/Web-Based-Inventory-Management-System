@@ -221,7 +221,7 @@ function DashboardPage() {
         <div style={ss.card}>
           <h3 style={ss.cardTitle}>Stock Distribution</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{pieData.map((_, i) => <Cell key={i} fill={C.PIE[i % C.PIE.length]} />)}</Pie><Tooltip /></PieChart>
+            <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>{pieData.map((_, i) => <Cell key={i} fill={C.PIE[i % C.PIE.length]} />)}</Pie><Tooltip /></PieChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -427,7 +427,7 @@ function ReportsPage() {
   useEffect(() => { apiFetch("/reports/demand-forecast/", token).then(r => r.json()).then(d => setForecast(d.forecasts || [])); }, [token]);
   return (
     <div>
-      <PH title="Intelligent Reports" sub="ML-powered data analysis"><button onClick={() => window.open(`${API_BASE}/reports/orders-export/`, "_blank")} style={ss.btnSec}>⬇ Export</button></PH>
+      <PH title="Intelligent Reports" sub="ML-powered data analysis"><button onClick={() => window.open(`${API_BASE}/reports/export-orders/`, "_blank")} style={ss.btnSec}>⬇ Export</button></PH>
       <div style={ss.card}>
         <h3 style={ss.cardTitle}>30-Day Demand Forecast</h3>
         <table style={ss.table}>
