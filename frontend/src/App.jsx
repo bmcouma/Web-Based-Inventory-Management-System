@@ -395,7 +395,20 @@ function CategoriesPage() {
   const [rows, setRows] = useState([]);
   useEffect(() => { apiFetch("/inventory/categories/", token).then(r => r.json()).then(d => setRows(d.results || [])); }, [token]);
   return (
-    <div><PH title="Categories" sub="" /><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 24 }}>{rows.map(c => (<div key={c.id} style={ss.card}><h4>{c.name}</h4><p>{c.description}</p></div>))}</div></div>
+    <div>
+      <PH title="Categories" sub="Product groupings and logic" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 24 }}>
+        {rows.map(c => (
+          <div key={c.id} style={{ ...ss.card, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", border: `1px solid ${C.border}`, transition: "transform 0.2s" }} onMouseEnter={e => e.currentTarget.style.transform = "translateY(-4px)"} onMouseLeave={e => e.currentTarget.style.transform = "none"}>
+            <img src={`https://picsum.photos/seed/${encodeURIComponent(c.name)}/400/200`} alt={c.name} style={{ width: "100%", height: 140, objectFit: "cover", borderBottom: `1px solid ${C.border}44` }} />
+            <div style={{ padding: 20 }}>
+              <h4 style={{ margin: "0 0 8px", fontSize: 18, color: C.text }}>{c.name}</h4>
+              <p style={{ margin: 0, fontSize: 13, color: C.muted, lineHeight: 1.5 }}>{c.description}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
